@@ -423,8 +423,10 @@ class stock_trader():
             trace_long = go.Scatter(
                 x=long_data.index, 
                 y=long_data.Price,
-                mode='markers',
+                mode='markers+text',
                 marker=dict(size=12, color='#0000FF'),
+                text = long_data["Action"],
+                textposition ="bottom center", 
                 name='Long',
                 yaxis=set_yaxis_4)
             data.append(trace_long)
@@ -434,8 +436,10 @@ class stock_trader():
             trace_sell = go.Scatter(
                 x=sell_data.index, 
                 y=sell_data.Price,
-                mode='markers',
+                mode='markers+text',
                 marker=dict(size=12, color='#FF00FF'),
+                text = sell_data["Action"],
+                textposition ="bottom center", 
                 name='Sell',
                 yaxis=set_yaxis_4)
             data.append(trace_sell)
@@ -445,6 +449,12 @@ class stock_trader():
             title=dict(
                 text='[Backtest] ' + self.stock_id + ' ' + self.stock_name,
                 x=0.05),
+            legend = dict(
+                orientation = "h",
+                x = 0,
+                y = 1.05,
+                yanchor = "top"
+            ),
             xaxis=dict(
                 rangeselector=dict(
                     buttons=list([
@@ -452,14 +462,14 @@ class stock_trader():
                             label="1m",
                             step="month",
                             stepmode="backward"),
+                        dict(count=3,
+                            label="3m",
+                            step="month",
+                            stepmode="backward"),
                         dict(count=6,
                             label="6m",
                             step="month",
                             stepmode="backward"),
-                        dict(count=1,
-                            label="YTD",
-                            step="year",
-                            stepmode="todate"),
                         dict(count=1,
                             label="1y",
                             step="year",
@@ -530,12 +540,99 @@ class stock_trader():
                     domain=domain_1
                 )
             )
-    
-        offline.plot(fig, filename = 'backtest.html', auto_open=False)
+
+        # offline.plot(fig, filename = 'backtest.html', auto_open=False)
+        fig_gain_loss = self.plot_gain_loss()
+        self.merge_figures([fig, fig_gain_loss], 'backtest.html')
+        
         print('Output plots to html file.')
 
         return
+
+    def plot_gain_loss(self):
+        each_win_lose = self.data.loc[(self.data["Win/Lose"] == "Win") | (self.data["Win/Lose"] == "Lose")]
+        colors = []
+        for i in range(len(each_win_lose)):
+            if each_win_lose["Gain/Loss"].iloc[i] >= 0:
+                colors.append("#3D9970")
+            else:
+                colors.append("#FF4136")
+
+        # x_axis = each_win_lose["Datetime"].apply(lambda x: x.strftime("%Y/%m/%d %H:%M"))
+        trace_each_action_by_datetime = go.Bar(
+            x = each_win_lose.index,
+            y = each_win_lose["Gain/Loss"],
+            base = 0,
+            marker = dict( color = colors ),
+            name = "Gain/Loss in each trade"
+        )
+
+        trace_cumulate_gain_and_loss = go.Scatter(
+            x = each_win_lose.index,
+            y = each_win_lose["Gain/Loss"].cumsum(),
+            # y = each_win_lose["Account"],
+            mode = "lines",
+            line = dict( color = "#622954" ),
+            name = "Cummulated gain/loss after each trade"
+        )
+        
+        fig = make_subplots(
+            rows = 2, 
+            cols = 1, 
+            specs = [[{}], [{}]],
+            shared_xaxes = True, 
+            shared_yaxes = False,
+            vertical_spacing = 0.001
+        )
+
+        fig.append_trace(trace_each_action_by_datetime, 1, 1)
+        fig.append_trace(trace_cumulate_gain_and_loss, 2, 1)
+
+        # Set styles
+        fig["layout"].update(
+            title = dict(
+                text = "Gain and loss in each trade // Cummulated gain and loss after each trade",
+                x = 0.05
+            ),
+            plot_bgcolor = "rgb(250, 250, 250)",
+            height = 600,
+            legend = dict(
+                orientation = "h",
+                x = 0,
+                y = 1.1,
+                yanchor = "top"
+            ),
+            # margin = dict(
+            #     t = 40,
+            #     b = 40,
+            #     r = 40,
+            #     l = 40
+            # ),
+            xaxis = dict(
+                type = "category"
+            ),
+            yaxis = dict(
+                domain = [0.5, 1]
+            ),
+            yaxis2 = dict(
+                domain = [0, 0.5]
+            ) 
+        )
     
+        return fig
+
+    def merge_figures(self, figures, filename):
+        dashboard = open(filename, 'w')
+        dashboard.write("<html><head></head><body>" + "\n")
+        add_js = True
+        for fig in figures:
+            inner_html = offline.plot(
+                fig, include_plotlyjs=add_js, output_type='div'
+            )
+            dashboard.write(inner_html)
+            add_js = False
+        dashboard.write("</body></html>" + "\n")
+
     def output_csv(self):
         self.data.to_csv('./Backtest/result/result.csv')
         print('Output data to csv file.')
